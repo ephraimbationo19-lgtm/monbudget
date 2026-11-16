@@ -256,18 +256,36 @@ export function ModalShell({
     };
   }, []);
 
+  const isAndroid = Platform.OS === 'android';
   // Sur Android, la fenêtre est parfois déjà réduite par le système :
   // on évite alors de soustraire deux fois la hauteur du clavier.
-  const windowResized = currentHeight < initialHeight - 50;
+  const windowResized = isAndroid && currentHeight < initialHeight - 50;
   const baseHeight = windowResized ? currentHeight : initialHeight;
-  const maxSheetHeight =
-    keyboardHeight > 0
+  const maxSheetHeight = isAndroid
+    ? keyboardHeight > 0
       ? Math.max(220, baseHeight - (windowResized ? 8 : keyboardHeight + 16))
-      : Math.round(baseHeight * 0.92);
+      : Math.round(baseHeight * 0.92)
+    : Math.round(initialHeight * 0.92);
+
+  // La feuille est ancrée en bas : il faut la remonter au-dessus du clavier,
+  // pas seulement réduire sa hauteur.
+  const marginBottom = isAndroid && !windowResized ? keyboardHeight : 0;
+
+  const lastFocusedY = useRef<number | null>(null);
 
   const scrollToInput = useCallback((y: number) => {
+    lastFocusedY.current = y;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 90), animated: true });
   }, []);
+
+  useEffect(() => {
+    if (keyboardHeight === 0 || lastFocusedY.current === null) return;
+    const timer = setTimeout(() => {
+      const y = lastFocusedY.current;
+      if (y !== null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 90), animated: true });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [keyboardHeight]);
 
   return (
     <Modal
@@ -282,7 +300,7 @@ export function ModalShell({
           <ModalScrollContext.Provider value={{ containerRef: scrollRef, scrollToInput }}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={[styles.keyboardAvoid, { maxHeight: maxSheetHeight }]}>
+              style={[styles.keyboardAvoid, { maxHeight: maxSheetHeight, marginBottom }]}>
               <View style={styles.sheet}>
                 <View style={styles.sheetHandle} />
                 <View style={styles.sheetHeader}>
