@@ -10,7 +10,6 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -20,8 +19,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
-  useWindowDimensions,
   View,
   type ScrollViewInstance,
 } from 'react-native';
@@ -241,8 +238,6 @@ export function ModalShell({
   children: ReactNode;
 }) {
   const scrollRef = useRef<ScrollViewInstance>(null);
-  const [initialHeight] = useState(() => Dimensions.get('window').height);
-  const { height: currentHeight } = useWindowDimensions();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -256,33 +251,18 @@ export function ModalShell({
     };
   }, []);
 
-  const isAndroid = Platform.OS === 'android';
-  // Sur Android, la fenêtre est parfois déjà réduite par le système :
-  // on évite alors de soustraire deux fois la hauteur du clavier.
-  const windowResized = isAndroid && currentHeight < initialHeight - 50;
-  const baseHeight = windowResized ? currentHeight : initialHeight;
-  const maxSheetHeight = isAndroid
-    ? keyboardHeight > 0
-      ? Math.max(220, baseHeight - (windowResized ? 8 : keyboardHeight + 16))
-      : Math.round(baseHeight * 0.92)
-    : Math.round(initialHeight * 0.92);
-
-  // La feuille est ancrée en bas : il faut la remonter au-dessus du clavier,
-  // pas seulement réduire sa hauteur.
-  const marginBottom = isAndroid && !windowResized ? keyboardHeight : 0;
-
   const lastFocusedY = useRef<number | null>(null);
 
   const scrollToInput = useCallback((y: number) => {
     lastFocusedY.current = y;
-    scrollRef.current?.scrollTo({ y: Math.max(0, y - 90), animated: true });
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
   }, []);
 
   useEffect(() => {
     if (keyboardHeight === 0 || lastFocusedY.current === null) return;
     const timer = setTimeout(() => {
       const y = lastFocusedY.current;
-      if (y !== null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 90), animated: true });
+      if (y !== null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
     }, 80);
     return () => clearTimeout(timer);
   }, [keyboardHeight]);
@@ -290,35 +270,29 @@ export function ModalShell({
   return (
     <Modal
       visible={visible}
-      transparent
       animationType="slide"
-      statusBarTranslucent
+      presentationStyle="fullScreen"
       onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.backdrop}>
-          <Pressable style={styles.backdropPress} onPress={onClose} accessibilityLabel="Fermer" />
-          <ModalScrollContext.Provider value={{ containerRef: scrollRef, scrollToInput }}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={[styles.keyboardAvoid, { maxHeight: maxSheetHeight, marginBottom }]}>
-              <View style={styles.sheet}>
-                <View style={styles.sheetHandle} />
-                <View style={styles.sheetHeader}>
-                  <Text style={styles.sheetTitle}>{title}</Text>
-                  <IconButton name="close" onPress={onClose} />
-                </View>
-                <ScrollView
-                  ref={scrollRef}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode="on-drag"
-                  contentContainerStyle={[styles.sheetContent, { paddingBottom: 24 }]}>
-                  {children}
-                </ScrollView>
-              </View>
-            </KeyboardAvoidingView>
-          </ModalScrollContext.Provider>
-        </View>
-      </TouchableWithoutFeedback>
+      <SafeAreaView style={styles.modalSafe} edges={['top', 'bottom']}>
+        <ModalScrollContext.Provider value={{ containerRef: scrollRef, scrollToInput }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardAvoid}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.sheetTitle}>{title}</Text>
+              <IconButton name="close" onPress={onClose} />
+            </View>
+            <ScrollView
+              ref={scrollRef}
+              style={styles.modalScroll}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={[styles.sheetContent, { paddingBottom: keyboardHeight + 32 }]}>
+              {children}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </ModalScrollContext.Provider>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -504,33 +478,20 @@ const styles = StyleSheet.create({
   },
   fabPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
   categoryIcon: { borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
-  backdropPress: { flex: 1 },
-  keyboardAvoid: { maxHeight: '92%', width: '100%' },
-  sheet: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '100%',
-    paddingBottom: 24,
-  },
-  sheetHandle: {
-    width: 42,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginTop: 10,
-  },
-  sheetHeader: {
+  modalSafe: { flex: 1, backgroundColor: colors.card },
+  keyboardAvoid: { flex: 1 },
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
+  modalScroll: { flex: 1 },
   sheetTitle: { fontSize: 19, fontWeight: '800', color: colors.text },
-  sheetContent: { paddingHorizontal: 20, paddingTop: 4 },
+  sheetContent: { paddingHorizontal: 20, paddingTop: 18 },
   field: { marginBottom: 14 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 7 },
   input: {
